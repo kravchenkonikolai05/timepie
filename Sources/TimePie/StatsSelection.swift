@@ -108,6 +108,49 @@ struct StatsSelection: Equatable {
         shownMonth = WeekMath.monthStart(for: start)
     }
 
+    // MARK: - Averages
+
+    /// How the breakdown reads: the whole stretch, or a typical day, week or month of it.
+    enum Average: String, CaseIterable, Identifiable {
+        case total = "Total"
+        case day = "Per Day"
+        case week = "Per Week"
+        case month = "Per Month"
+
+        var id: Self { self }
+
+        /// How many days one of it is. A month is an average one.
+        var days: Double {
+            switch self {
+            case .total: 0
+            case .day: 1
+            case .week: 7
+            case .month: 365.2425 / 12
+            }
+        }
+    }
+
+    /// The days an average is taken over: the selected ones you could have logged,
+    /// so neither days still to come nor days from before you started count as zero.
+    func countedDays(logged: ClosedRange<Date>?, today: Date = Date()) -> Int {
+        guard let logged else { return 0 }
+        let first = max(start, logged.lowerBound)
+        let last = min(end, max(WeekMath.startOfDay(today), logged.upperBound))
+        return max(0, WeekMath.days(from: first, to: last) + 1)
+    }
+
+    /// The averages worth offering over `counted` days: each needs at least two of
+    /// its unit, or it would just be the total again.
+    static func averages(counted: Int) -> [Average] {
+        Average.allCases.filter { $0 == .total || Double(counted) >= 2 * $0.days }
+    }
+
+    /// `minutes` over `counted` days, as a typical `average`.
+    static func averaged(_ minutes: Int, over counted: Int, as average: Average) -> Int {
+        guard average != .total, counted > 0 else { return minutes }
+        return Int((Double(minutes) * average.days / Double(counted)).rounded())
+    }
+
     // MARK: - Labels
 
     /// "Today", "Mon, Oct 26", "October 2026", "Oct 3 – 17", "All Time".

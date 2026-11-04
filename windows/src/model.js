@@ -557,6 +557,35 @@ export const Stats = {
 
   dayCount: (s) => daysBetween(s.start, s.end) + 1,
 
+  /**
+   * How the breakdown reads: the whole stretch, or a typical day, week or month of it,
+   * with how many days one of each is. A month is an average one.
+   */
+  averages: [['total', 'Total', 0], ['day', 'Per Day', 1], ['week', 'Per Week', 7], ['month', 'Per Month', 365.2425 / 12]],
+
+  /**
+   * The days an average is taken over: the selected ones you could have logged, so
+   * neither days still to come nor days from before you started count as zero.
+   */
+  countedDays(s, logged, today = new Date()) {
+    if (!logged) return 0;
+    const first = logged.first > s.start ? logged.first : s.start;
+    const day = startOfDay(today);
+    const lastLoggable = logged.last > day ? logged.last : day;
+    const last = lastLoggable < s.end ? lastLoggable : s.end;
+    return Math.max(0, daysBetween(first, last) + 1);
+  },
+
+  /** The averages worth offering over `counted` days: each needs at least two of its unit. */
+  averagesFor: (counted) => Stats.averages.filter(([key, , days]) => key === 'total' || counted >= 2 * days),
+
+  /** `minutes` over `counted` days, as a typical `average`. */
+  averaged(minutes, counted, average) {
+    const days = Stats.averages.find(([key]) => key === average)?.[2] ?? 0;
+    if (!days || counted <= 0) return minutes;
+    return Math.round((minutes * days) / counted);
+  },
+
   /** What the next click does, while that isn't obvious. */
   hint(s) {
     if (s.mode === 'interval' && !s.anchored && s.start.getTime() === s.end.getTime()) return 'Click the first day';

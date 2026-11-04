@@ -355,7 +355,8 @@ button { font: inherit; color: inherit; cursor: default; }
 /* Stats */
 
 .stats { flex: 1 1 auto; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
-.stats-modes { align-self: center; }
+.stats-modes, .stats-averages { align-self: center; }
+.stats-averages { margin-bottom: -8px; }
 .chev:disabled { opacity: 0.35; background: transparent; }
 
 .calendar { padding: 8px 10px 4px; }

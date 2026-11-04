@@ -7,15 +7,22 @@ struct StatsView: View {
     @Binding var selection: StatsSelection
 
     @State private var hoveredID: UUID?
+    /// The average last picked. It comes back whenever the selection is long enough for it.
+    @State private var average: StatsSelection.Average = .total
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let byActivity = store.minutesByActivity(from: selection.start, to: selection.endExclusive)
+        let counted = selection.countedDays(logged: store.loggedSpan)
+        let averages = StatsSelection.averages(counted: counted)
+        let shownAverage = averages.contains(average) ? average : .total
         // Every activity, with or without time here, so moving the selection only
         // resizes slices and the chart can animate it.
         let slices = store.orderedActivities.map {
             Slice(id: $0.id, name: $0.name,
-                  minutes: max(0, byActivity[$0.id] ?? 0), colorSlot: $0.colorSlot)
+                  minutes: StatsSelection.averaged(max(0, byActivity[$0.id] ?? 0),
+                                                   over: counted, as: shownAverage),
+                  colorSlot: $0.colorSlot)
         }
         let total = slices.reduce(0) { $0 + $1.minutes }
 
@@ -36,15 +43,33 @@ struct StatsView: View {
             VStack(spacing: 8) {
                 DonutChart(slices: slices, hoveredID: hoveredID, onHover: { hoveredID = $0 })
                     .frame(height: 220)
-                if total > 0, selection.dayCount > 1 {
-                    Text("\(selection.dayCount) days · \(Duration.format(minutes: total / selection.dayCount)) a day")
+                if total > 0, counted > 1 {
+                    Text(shownAverage == .total
+                         ? "\(counted) days · \(Duration.format(minutes: total / counted)) a day"
+                         : "Averaged over \(counted) days")
                         .font(.callout)
                         .foregroundStyle(Ink.muted)
                         .monospacedDigit()
                 }
             }
 
-            breakdown(slices.filter { $0.minutes > 0 }.sorted { $0.minutes > $1.minutes }, total: total)
+            VStack(spacing: 10) {
+                if averages.count > 1 {
+                    Picker("Average", selection: Binding(
+                        get: { shownAverage },
+                        set: { picked in change { average = picked } }
+                    )) {
+                        ForEach(averages) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                    .help("Show the whole stretch, or a typical day, week or month of it")
+                }
+
+                breakdown(slices.filter { $0.minutes > 0 }.sorted { $0.minutes > $1.minutes }, total: total)
+            }
         }
     }
 

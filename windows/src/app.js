@@ -439,13 +439,18 @@ function App() {
 function StatsView({ selection: s, onChange }) {
   const store = useStore();
   const [hoveredID, setHoveredID] = useState(null);
+  // The average last picked. It comes back whenever the selection is long enough for it.
+  const [average, setAverage] = useState('total');
 
   const byActivity = store.minutesByActivity(s.start, W.addDays(1, s.end));
+  const days = W.Stats.countedDays(s, store.loggedSpan);
+  const averages = W.Stats.averagesFor(days);
+  const shownAverage = averages.some(([key]) => key === average) ? average : 'total';
   const slices = store.orderedActivities.map((a) => ({
-    id: a.id, name: a.name, minutes: Math.max(0, byActivity.get(a.id) ?? 0), colorSlot: a.colorSlot,
+    id: a.id, name: a.name, colorSlot: a.colorSlot,
+    minutes: W.Stats.averaged(Math.max(0, byActivity.get(a.id) ?? 0), days, shownAverage),
   }));
   const total = slices.reduce((sum, x) => sum + x.minutes, 0);
-  const days = W.Stats.dayCount(s);
   // What the chart is made of, biggest first.
   const shown = slices.filter((x) => x.minutes > 0).sort((a, b) => b.minutes - a.minutes);
 
@@ -462,8 +467,17 @@ function StatsView({ selection: s, onChange }) {
       <div class="stats-chart">
         <${Donut} slices=${slices} size=${220} hoveredID=${hoveredID} onHover=${setHoveredID} animate />
         ${total > 0 && days > 1 && html`
-          <div class="stats-average num">${days} days · ${Duration.format(Math.floor(total / days))} a day</div>`}
+          <div class="stats-average num">${shownAverage === 'total'
+            ? `${days} days · ${Duration.format(Math.floor(total / days))} a day`
+            : `Averaged over ${days} days`}</div>`}
       </div>
+
+      ${averages.length > 1 && html`
+        <div class="segmented stats-averages" title="Show the whole stretch, or a typical day, week or month of it">
+          ${averages.map(([key, label]) => html`
+            <button key=${key} class=${shownAverage === key ? 'on' : ''}
+              onClick=${() => setAverage(key)}>${label}</button>`)}
+        </div>`}
 
       <div class="card stats-breakdown">
         ${shown.length === 0 && html`
