@@ -101,14 +101,15 @@ struct DonutChart: View {
                 .contentTransition(.numericText())
                 // Hung just below the total rather than stacked with it, so the total
                 // stays dead centre in the ring.
-                .overlay(alignment: .bottom) {
+                // (An alignment guide is lost through the `if`, which laid it over the total.)
+                .overlay(alignment: .top) {
                     if focused == nil, let caption {
                         Text(caption)
                             .font(.system(size: 18))
                             .foregroundStyle(.secondary)
                             .contentTransition(.numericText())
                             .fixedSize()
-                            .alignmentGuide(.bottom) { $0[.top] - 2 }
+                            .offset(y: 40)
                     }
                 }
             if let focused {
