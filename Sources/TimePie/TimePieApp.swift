@@ -15,7 +15,7 @@ struct TimePieApp: App {
                 .task { await updates.watch() }
                 .background(FullScreenBlocker())
         }
-        .defaultSize(width: 560, height: 700)
+        .defaultSize(width: 460, height: 620)
         .commands {
             CommandGroup(replacing: .newItem) { }
 
