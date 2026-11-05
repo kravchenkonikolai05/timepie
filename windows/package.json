@@ -1,7 +1,7 @@
 {
   "name": "timepie",
   "productName": "TimePie",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "TimePie — a weekly time donut",
   "author": "Nikolai Kravchenko",
   "main": "main.js",
