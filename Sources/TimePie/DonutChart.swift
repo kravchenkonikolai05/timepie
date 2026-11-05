@@ -99,15 +99,22 @@ struct DonutChart: View {
                 .font(.system(size: 32, weight: .semibold, design: .rounded))
                 .foregroundStyle(total == 0 ? .tertiary : .primary)
                 .contentTransition(.numericText())
+                // Hung just below the total rather than stacked with it, so the total
+                // stays dead centre in the ring.
+                .overlay(alignment: .bottom) {
+                    if focused == nil, let caption {
+                        Text(caption)
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
+                            .fixedSize()
+                            .alignmentGuide(.bottom) { $0[.top] - 2 }
+                    }
+                }
             if let focused {
                 Text("\(focused.name) · \(percent(focused))")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-            } else if let caption {
-                Text(caption)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
             }
         }
         .lineLimit(1)

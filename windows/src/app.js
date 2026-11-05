@@ -184,12 +184,17 @@ function App() {
   const toggleGlobal = toggler(setShowingGlobal);
   const toggleSettings = toggler(setShowingSettings);
 
-  // ← and → step through weeks, unless a text field is taking the arrow keys.
+  // ← and → step through weeks, unless a text field is taking the arrow keys. Escape
+  // leaves whichever page is open and goes back to the week — once any menu or the log
+  // that's open on top has closed itself.
   useEffect(() => {
     const onKey = (e) => {
       if (isTyping() || e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.key === 'ArrowLeft') step(-1);
       if (e.key === 'ArrowRight') step(1);
+      if (e.key === 'Escape' && !document.querySelector('.pages-menu-list, .log-panel')) {
+        pageSetters.forEach((set) => set(false));
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -320,7 +325,7 @@ function App() {
     };
   });
 
-  // The buttons on the right of the header. A narrow window folds them into one menu.
+  // The pages in the header's ☰ menu.
   const pages = [
     { label: 'Stats', Glyph: CalendarGlyph, on: showingStats, toggle: toggleStats,
       title: showingStats ? 'Back to your week' : 'Your time over any day, month or interval' },
@@ -360,10 +365,6 @@ function App() {
           <${Chevron} dir="right" />
         </button>
         <div class="header-tools">
-          ${pages.map((p) => html`
-            <button key=${p.label} class="tool ${p.className ?? ''} ${p.on ? 'on' : ''}" onClick=${p.toggle} title=${p.title}>
-              <${p.Glyph} />
-            </button>`)}
           <${PagesMenu} pages=${pages} />
         </div>
         ${showingLog && html`<${LogPanel} week=${viewedWeek} onClose=${() => setShowingLog(false)} />`}
@@ -569,7 +570,7 @@ function StatsCalendar({ selection: s, onChange }) {
   `;
 }
 
-/** The header's buttons in one ☰ menu, for when the window is too narrow to show them. */
+/** The header's pages — stats, log, friends, leaderboard, settings — in one ☰ menu. */
 function PagesMenu({ pages }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();

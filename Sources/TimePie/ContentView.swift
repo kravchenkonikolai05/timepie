@@ -27,8 +27,6 @@ struct ContentView: View {
     /// Preferences. TIMEPIE_SHOW_SETTINGS opens on it, for a test run.
     @State private var showingSettings = ProcessInfo.processInfo.environment["TIMEPIE_SHOW_SETTINGS"] != nil
     @AppStorage(Settings.showDayAverage) private var showDayAverage = false
-    /// Whether the toolbar's buttons fit side by side or fold into a menu.
-    @State private var windowWidth: CGFloat = 560
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The row being dragged by its handle, and how far it has travelled.
@@ -174,7 +172,6 @@ struct ContentView: View {
             .animation(motion(Motion.snappy), value: updates.available)
         }
         .frame(minWidth: 460, minHeight: 620)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         .navigationTitle(showingStats ? stats.title : WeekMath.weekLabel(for: viewedWeek))
         .navigationSubtitle(shownTotalMinutes == 0
                             ? "Nothing logged"
@@ -217,6 +214,12 @@ struct ContentView: View {
         .focused($rootFocused)
         .focusEffectDisabled()
         .onAppear { rootFocused = true }
+        // Escape leaves whichever page is open and goes back to the week.
+        .onKeyPress(.escape) {
+            guard showingStats || showingFriends || showingGlobal || showingSettings else { return .ignored }
+            showingStats = false; showingFriends = false; showingGlobal = false; showingSettings = false
+            return .handled
+        }
         .onKeyPress(.leftArrow) {
             step(-1)
             return .handled
@@ -248,59 +251,39 @@ struct ContentView: View {
             }
             .disabled(showingStats && stats.mode == .allTime)
         }
-        ToolbarItemGroup(placement: .primaryAction) {
-            // A narrow window can't fit them all, so they fold into one menu.
-            if windowWidth < Self.toolbarFoldWidth {
-                Menu {
-                    pageToggles(anchoringLog: false)
-                } label: {
-                    Label("Menu", systemImage: "line.3.horizontal")
-                }
-                .menuIndicator(.hidden)
-                .help("Stats, log, friends, leaderboard and settings")
-                .popover(isPresented: $showingLog, arrowEdge: .bottom) {
-                    LogView(weekStart: viewedWeek)
-                }
-            } else {
-                pageToggles(anchoringLog: true)
-                    .labelStyle(.iconOnly)
+        ToolbarItem(placement: .primaryAction) {
+            // The pages live in one ☰ menu, whatever the window's width.
+            Menu {
+                pageToggles
+            } label: {
+                Label("Menu", systemImage: "line.3.horizontal")
+            }
+            .menuIndicator(.hidden)
+            .help("Stats, log, friends, leaderboard and settings")
+            .popover(isPresented: $showingLog, arrowEdge: .bottom) {
+                LogView(weekStart: viewedWeek)
             }
         }
     }
 
-    /// Below this width the buttons on the right don't all fit beside the week.
-    private static let toolbarFoldWidth: CGFloat = 590
-
-    /// The log drops down from its own button, or from the menu when that holds it.
     @ViewBuilder
-    private func pageToggles(anchoringLog: Bool) -> some View {
+    private var pageToggles: some View {
         Toggle(isOn: $showingStats) {
             Label("Stats", systemImage: "calendar")
         }
-        .help(showingStats ? "Back to your week" : "Your time over any day, month or interval")
-        let log = Toggle(isOn: $showingLog) {
+        Toggle(isOn: $showingLog) {
             Label("Log", systemImage: "list.bullet.clipboard")
-        }
-        .help("Everything logged this week")
-        if anchoringLog {
-            log.popover(isPresented: $showingLog, arrowEdge: .bottom) {
-                LogView(weekStart: viewedWeek)
-            }
-        } else {
-            log
         }
         Toggle(isOn: $showingFriends) {
             Label("Friends", systemImage: "person.2")
         }
-        .help(showingFriends ? "Back to your week" : "Compare this week with friends")
         Toggle(isOn: $showingGlobal) {
             Label("Leaderboard", systemImage: "trophy")
         }
-        .help(showingGlobal ? "Back to your week" : "This week's totals for everyone using TimePie")
+        Divider()
         Toggle(isOn: $showingSettings) {
             Label("Settings", systemImage: "gearshape")
         }
-        .help(showingSettings ? "Back to your week" : "Settings")
     }
 
     // MARK: - Chart
