@@ -58,6 +58,9 @@ const CalendarGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16"
 const TrophyGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
   stroke-width="1.3" stroke-linejoin="round"><path d="M4.5 2h7v4a3.5 3.5 0 0 1-7 0V2Z" />
   <path d="M4.5 3.5H2.5v1a2.5 2.5 0 0 0 2.2 2.5M11.5 3.5h2v1a2.5 2.5 0 0 1-2.2 2.5M8 9.5V12M5.5 14h5M6 12h4" /></svg>`;
+const GearGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+  stroke-width="1.3" stroke-linejoin="round"><circle cx="8" cy="8" r="2.2" />
+  <path d="M6.9 1.5h2.2l.4 1.9 1.3.7 1.8-.7 1.1 1.9-1.4 1.3v1.6l1.4 1.3-1.1 1.9-1.8-.7-1.3.7-.4 1.9H6.9l-.4-1.9-1.3-.7-1.8.7-1.1-1.9 1.4-1.3V7.2L1.3 5.9l1.1-1.9 1.8.7 1.3-.7.4-1.9Z" /></svg>`;
 const MenuGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
   stroke-width="1.4" stroke-linecap="round"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" /></svg>`;
 const LogGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
@@ -86,6 +89,14 @@ function App() {
   const [stats, setStats] = useState(() => W.Stats.initial());
   // The board everyone can join, for the week on screen.
   const [showingGlobal, setShowingGlobal] = useState(false);
+  // Preferences, in place of the week like the pages above.
+  const [showingSettings, setShowingSettings] = useState(false);
+  const [settings, setSettingsState] = useState(() => W.Settings.load());
+  const setSetting = (key, value) => setSettingsState((s) => {
+    const next = { ...s, [key]: value };
+    W.Settings.save(next);
+    return next;
+  });
   // The row being dragged by its handle: { id, isFolder, from, offset, stride, slot, into }.
   // `slot` is where the gap is, as an index into the rows without the lifted one;
   // `into` is a folder the lifted task is held over, to drop it in.
@@ -166,21 +177,12 @@ function App() {
   };
 
   // The pages that take the week's place take turns.
-  const toggleStats = () => {
-    setShowingStats((v) => !v);
-    setShowingFriends(false);
-    setShowingGlobal(false);
-  };
-  const toggleFriends = () => {
-    setShowingFriends((v) => !v);
-    setShowingStats(false);
-    setShowingGlobal(false);
-  };
-  const toggleGlobal = () => {
-    setShowingGlobal((v) => !v);
-    setShowingStats(false);
-    setShowingFriends(false);
-  };
+  const pageSetters = [setShowingStats, setShowingFriends, setShowingGlobal, setShowingSettings];
+  const toggler = (own) => () => pageSetters.forEach((set) => (set === own ? set((v) => !v) : set(false)));
+  const toggleStats = toggler(setShowingStats);
+  const toggleFriends = toggler(setShowingFriends);
+  const toggleGlobal = toggler(setShowingGlobal);
+  const toggleSettings = toggler(setShowingSettings);
 
   // ← and → step through weeks, unless a text field is taking the arrow keys.
   useEffect(() => {
@@ -328,7 +330,14 @@ function App() {
       title: showingFriends ? 'Back to your week' : 'Compare this week with friends' },
     { label: 'Leaderboard', Glyph: TrophyGlyph, on: showingGlobal, toggle: toggleGlobal,
       title: showingGlobal ? 'Back to your week' : 'This week\u2019s totals for everyone using TimePie' },
+    { label: 'Settings', Glyph: GearGlyph, on: showingSettings, toggle: toggleSettings,
+      title: showingSettings ? 'Back to your week' : 'Settings' },
   ];
+
+  // "~3,5h": the week's total spread over its days so far, if that's switched on.
+  const daysSoFar = W.daysElapsed(viewedWeek, today);
+  const dayAverage = settings.showDayAverage && weekTotal > 0 && daysSoFar > 0
+    ? Duration.approxHours(weekTotal / daysSoFar) : null;
 
   // On the stats page the header shows its span, and the arrows step through it.
   const unit = showingStats ? W.Stats.unitName(stats) : 'week';
@@ -363,11 +372,13 @@ function App() {
       ${update && !updateDismissed && html`
         <${UpdateNotice} update=${update} onClose=${() => setUpdateDismissed(true)} />`}
 
-      ${showingStats ? html`<${StatsView} selection=${stats} onChange=${setStats} />`
+      ${showingSettings ? html`<${SettingsView} settings=${settings} onSet=${setSetting} />`
+        : showingStats ? html`<${StatsView} selection=${stats} onChange=${setStats} />`
         : showingGlobal ? html`<${GlobalView} week=${viewedWeek} />`
         : showingFriends ? html`<${FriendsView} week=${viewedWeek} />` : html`
       <div class="chart">
-        <${Donut} slices=${slices} size=${250} hoveredID=${hoveredID} onHover=${setHoveredID} animate />
+        <${Donut} slices=${slices} size=${250} hoveredID=${hoveredID} onHover=${setHoveredID}
+          caption=${dayAverage} animate />
       </div>
 
       <div class="rows ${drag ? 'reordering' : ''}">
@@ -577,7 +588,7 @@ function PagesMenu({ pages }) {
   return html`
     <div class="pages-menu" ref=${ref}>
       <button class="tool log-toggle ${open || pages.some((p) => p.on) ? 'on' : ''}" onClick=${() => setOpen((v) => !v)}
-        title="Stats, log, friends and leaderboard"><${MenuGlyph} /></button>
+        title="Stats, log, friends, leaderboard and settings"><${MenuGlyph} /></button>
       ${open && html`
         <div class="pages-menu-list">
           ${pages.map((p) => html`
@@ -759,7 +770,7 @@ function useTweenedArcs(targets, animate) {
 }
 
 /** Part-to-whole at a glance. 100% is the time you logged, not the whole week. */
-function Donut({ slices, size, hoveredID, onHover, compact = false, animate = false }) {
+function Donut({ slices, size, hoveredID, onHover, caption = null, compact = false, animate = false }) {
   const total = slices.reduce((s, x) => s + Math.max(0, x.minutes), 0);
   const ringWidth = size * (compact ? 0.30 : 0.28);
   const outerR = size / 2;
@@ -798,13 +809,14 @@ function Donut({ slices, size, hoveredID, onHover, compact = false, animate = fa
                 stroke-width=${hoveredID === a.id ? ringWidth + 6 : ringWidth}
                 stroke-linecap="butt" />`)}
       </svg>
-      ${!compact && html`<${CenterFigure} minutes=${total} width=${innerR * 2 - 16} />`}
+      ${!compact && html`<${CenterFigure} minutes=${total} width=${innerR * 2 - 16}
+        caption=${hoveredID ? null : caption} />`}
     </div>
   `;
 }
 
 /** The one number the app leads with; shrinks (to half, at most) rather than clipping. */
-function CenterFigure({ minutes, width }) {
+function CenterFigure({ minutes, width, caption }) {
   const ref = useRef();
   const text = Duration.format(minutes);
   useLayoutEffect(() => {
@@ -813,7 +825,31 @@ function CenterFigure({ minutes, width }) {
     const natural = el.offsetWidth;
     if (natural > width) el.style.fontSize = `${34 * Math.max(0.5, width / natural)}px`;
   }, [text, width]);
-  return html`<div class="center-figure ${minutes === 0 ? 'empty' : ''}"><span ref=${ref}>${text}</span></div>`;
+  return html`<div class="center-figure ${minutes === 0 ? 'empty' : ''}">
+    <span ref=${ref}>${text}</span>
+    ${caption && html`<span class="center-caption num">${caption}</span>`}
+  </div>`;
+}
+
+// MARK: - Settings
+
+/** Preferences, in place of the week. One card of rows; new settings are new rows. */
+function SettingsView({ settings, onSet }) {
+  return html`
+    <div class="friends">
+      <div class="settings-heading">Chart</div>
+      <div class="card group-card">
+        <label class="setting">
+          <span>
+            <div>Show average per day</div>
+            <div class="caption">Under the week’s total: what it comes to per day so far, like ~3,5h.</div>
+          </span>
+          <input type="checkbox" class="switch" checked=${settings.showDayAverage}
+            onChange=${(e) => onSet('showDayAverage', e.currentTarget.checked)} />
+        </label>
+      </div>
+    </div>
+  `;
 }
 
 // MARK: - Activity row

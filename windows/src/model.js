@@ -45,6 +45,9 @@ export function addMonths(n, d) {
 export const monthEnd = (d) => addMonths(1, monthStart(d));
 
 /** Whole days from one start-of-day to another. */
+/** Days of a week counted so far: up to and including today in this week, all seven in a past one, none in one to come. */
+export const daysElapsed = (week, today) => Math.min(7, Math.max(0, daysBetween(weekStart(week), today) + 1));
+
 export const daysBetween = (a, b) => Math.round((startOfDay(b) - startOfDay(a)) / 86400000);
 
 const monthShort = (d) => d.toLocaleDateString(undefined, { month: 'short' });
@@ -87,6 +90,12 @@ export const Duration = {
     if (h === 0) return `${mins}m`;
     if (mins === 0) return `${h}h`;
     return `${h}h ${mins}m`;
+  },
+
+  /** Hours to one decimal, roughly: "~3,5h", "~2h" — in the user's own number style. */
+  approxHours(minutes) {
+    const h = Math.max(0, minutes) / 60;
+    return `~${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(h)}h`;
   },
 
   /** A running stopwatch: "12:34", or "1:02:15" once it passes an hour. */
@@ -663,5 +672,19 @@ export const Stats = {
     const sameYear = s.start.getFullYear() === thisYear && s.end.getFullYear() === thisYear;
     return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) })
       .formatRange(s.start, s.end);
+  },
+};
+
+// MARK: - Settings
+
+/** Preferences, kept on this computer. Each one is a key here and a row on the settings page. */
+export const Settings = {
+  defaults: { showDayAverage: false },
+  load() {
+    try { return { ...this.defaults, ...JSON.parse(localStorage.getItem('settings') || '{}') }; }
+    catch { return { ...this.defaults }; }
+  },
+  save(settings) {
+    try { localStorage.setItem('settings', JSON.stringify(settings)); } catch {}
   },
 };

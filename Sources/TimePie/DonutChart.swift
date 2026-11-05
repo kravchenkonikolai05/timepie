@@ -17,6 +17,9 @@ struct DonutChart: View {
     let slices: [Slice]
     var hoveredID: UUID?
     var compact: Bool = false
+    /// A small grey line under the total, such as the average per day. Hidden while a
+    /// slice is hovered, when the centre shows that slice instead.
+    var caption: String? = nil
     var onHover: ((UUID?) -> Void)?
 
     private var total: Int { slices.reduce(0) { $0 + max(0, $1.minutes) } }
@@ -96,11 +99,15 @@ struct DonutChart: View {
                 .font(.system(size: 32, weight: .semibold, design: .rounded))
                 .foregroundStyle(total == 0 ? .tertiary : .primary)
                 .contentTransition(.numericText())
-            // Only a hovered slice gets a caption; the total stands on its own.
             if let focused {
                 Text("\(focused.name) · \(percent(focused))")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            } else if let caption {
+                Text(caption)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
             }
         }
         .lineLimit(1)

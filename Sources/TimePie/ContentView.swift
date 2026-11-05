@@ -24,6 +24,9 @@ struct ContentView: View {
     /// The board everyone can join, for the week on screen.
     /// TIMEPIE_SHOW_GLOBAL opens on it, for a test run.
     @State private var showingGlobal = ProcessInfo.processInfo.environment["TIMEPIE_SHOW_GLOBAL"] != nil
+    /// Preferences. TIMEPIE_SHOW_SETTINGS opens on it, for a test run.
+    @State private var showingSettings = ProcessInfo.processInfo.environment["TIMEPIE_SHOW_SETTINGS"] != nil
+    @AppStorage(Settings.showDayAverage) private var showDayAverage = false
     /// Whether the toolbar's buttons fit side by side or fold into a menu.
     @State private var windowWidth: CGFloat = 560
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -126,7 +129,9 @@ struct ContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
-                if showingStats {
+                if showingSettings {
+                    SettingsView()
+                } else if showingStats {
                     StatsView(selection: $stats)
                 } else if showingGlobal {
                     GlobalView(week: viewedWeek)
@@ -157,7 +162,7 @@ struct ContentView: View {
                     .padding([.horizontal, .bottom], 12)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-                if !showingFriends && !showingStats && !showingGlobal {
+                if !showingFriends && !showingStats && !showingGlobal && !showingSettings {
                     HistoryStrip(
                         weeks: historyThumbs(),
                         selectedWeekStart: viewedWeek,
@@ -176,15 +181,7 @@ struct ContentView: View {
                             : "\(Duration.format(minutes: shownTotalMinutes)) logged")
         .toolbar { weekToolbar }
         // The pages that take the week's place take turns.
-        .onChange(of: showingStats) {
-            if showingStats { showingFriends = false; showingGlobal = false }
-        }
-        .onChange(of: showingFriends) {
-            if showingFriends { showingStats = false; showingGlobal = false }
-        }
-        .onChange(of: showingGlobal) {
-            if showingGlobal { showingStats = false; showingFriends = false }
-        }
+        .modifier(PagesTakeTurns(pages: [$showingStats, $showingFriends, $showingGlobal, $showingSettings]))
         // Every change goes out to the group, if you're in one.
         .onAppear { friends.storeChanged(store, after: 0, force: true) }
         .onChange(of: store.revision) { friends.storeChanged(store) }
@@ -252,7 +249,7 @@ struct ContentView: View {
             .disabled(showingStats && stats.mode == .allTime)
         }
         ToolbarItemGroup(placement: .primaryAction) {
-            // A narrow window can't fit all four, so they fold into one menu.
+            // A narrow window can't fit them all, so they fold into one menu.
             if windowWidth < Self.toolbarFoldWidth {
                 Menu {
                     pageToggles(anchoringLog: false)
@@ -260,7 +257,7 @@ struct ContentView: View {
                     Label("Menu", systemImage: "line.3.horizontal")
                 }
                 .menuIndicator(.hidden)
-                .help("Stats, log, friends and leaderboard")
+                .help("Stats, log, friends, leaderboard and settings")
                 .popover(isPresented: $showingLog, arrowEdge: .bottom) {
                     LogView(weekStart: viewedWeek)
                 }
@@ -272,7 +269,7 @@ struct ContentView: View {
     }
 
     /// Below this width the buttons on the right don't all fit beside the week.
-    private static let toolbarFoldWidth: CGFloat = 550
+    private static let toolbarFoldWidth: CGFloat = 590
 
     /// The log drops down from its own button, or from the menu when that holds it.
     @ViewBuilder
@@ -300,12 +297,17 @@ struct ContentView: View {
             Label("Leaderboard", systemImage: "trophy")
         }
         .help(showingGlobal ? "Back to your week" : "This week's totals for everyone using TimePie")
+        Toggle(isOn: $showingSettings) {
+            Label("Settings", systemImage: "gearshape")
+        }
+        .help(showingSettings ? "Back to your week" : "Settings")
     }
 
     // MARK: - Chart
 
     private var chart: some View {
-        DonutChart(slices: slices(), hoveredID: hoveredID, onHover: { hoveredID = $0 })
+        DonutChart(slices: slices(), hoveredID: hoveredID, caption: dayAverageCaption,
+                   onHover: { hoveredID = $0 })
             .frame(height: 240)
     }
 
@@ -555,6 +557,14 @@ struct ContentView: View {
         store.totalMinutes(from: viewedWeek, to: weekEnd)
     }
 
+    /// "~3,5h": the week's total spread over its days so far, if that's switched on.
+    private var dayAverageCaption: String? {
+        guard showDayAverage, weekTotalMinutes > 0 else { return nil }
+        let days = WeekMath.daysElapsed(inWeek: viewedWeek, today: today)
+        guard days > 0 else { return nil }
+        return Duration.approxHours(minutes: Double(weekTotalMinutes) / Double(days))
+    }
+
     /// The total in the window's subtitle: the week's, or the stats page's span.
     private var shownTotalMinutes: Int {
         showingStats
@@ -622,5 +632,17 @@ struct ContentView: View {
         today = day
         if viewedWeek == WeekMath.weekStart(for: previous) { select(week: day) }
         if stats == StatsSelection(today: previous) { stats = StatsSelection(today: day) }
+    }
+}
+
+/// Turning one page on turns the others off.
+private struct PagesTakeTurns: ViewModifier {
+    let pages: [Binding<Bool>]
+
+    func body(content: Content) -> some View {
+        content.onChange(of: pages.map(\.wrappedValue)) { old, new in
+            guard let opened = new.indices.first(where: { new[$0] && !old[$0] }) else { return }
+            for i in pages.indices where i != opened { pages[i].wrappedValue = false }
+        }
     }
 }

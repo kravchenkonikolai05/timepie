@@ -77,6 +77,14 @@ enum WeekMath {
             : "\(month.string(from: start)) – \(month.string(from: end))"
     }
 
+    /// Days of a week counted so far: up to and including today in this week, all
+    /// seven in a past one, none in a week still to come.
+    static func daysElapsed(inWeek week: Date, today: Date) -> Int {
+        let start = weekStart(for: week)
+        let n = days(from: start, to: today) + 1
+        return min(7, max(0, n))
+    }
+
     /// "Mon Sep 21"
     static func dayLabel(for date: Date) -> String {
         let f = DateFormatter()
@@ -94,6 +102,15 @@ enum Duration {
         if h == 0 { return "\(mins)m" }
         if mins == 0 { return "\(h)h" }
         return "\(h)h \(mins)m"
+    }
+
+    /// Hours to one decimal, roughly: "~3,5h", "~2h" — in the user's own number style.
+    static func approxHours(minutes: Double) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 1
+        return "~\(f.string(from: NSNumber(value: max(0, minutes) / 60)) ?? "0")h"
     }
 
     /// A running stopwatch: "12:34", or "1:02:15" once it passes an hour.
