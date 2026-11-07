@@ -340,9 +340,15 @@ function App() {
   ];
 
   // "~3,5h": the week's total spread over its days so far, if that's switched on.
+  // Today only counts once it lifts the average, so it doesn't sink every morning
+  // before any work is in; a short day pulls it down at midnight instead.
   const daysSoFar = W.daysElapsed(viewedWeek, today);
+  let perDay = daysSoFar > 0 ? weekTotal / daysSoFar : 0;
+  if (daysSoFar > 1 && W.isSameWeek(viewedWeek, today)) {
+    perDay = Math.max(perDay, store.totalMinutes(viewedWeek, today) / (daysSoFar - 1));
+  }
   const dayAverage = settings.showDayAverage && weekTotal > 0 && daysSoFar > 0
-    ? Duration.approxHours(weekTotal / daysSoFar) : null;
+    ? Duration.approxHours(perDay) : null;
 
   // On the stats page the header shows its span, and the arrows step through it.
   const unit = showingStats ? W.Stats.unitName(stats) : 'week';

@@ -543,11 +543,18 @@ struct ContentView: View {
     }
 
     /// "~3,5h": the week's total spread over its days so far, if that's switched on.
+    /// Today only counts once it lifts the average, so it doesn't sink every morning
+    /// before any work is in; a short day pulls it down at midnight instead.
     private var dayAverageCaption: String? {
         guard showDayAverage, weekTotalMinutes > 0 else { return nil }
         let days = WeekMath.daysElapsed(inWeek: viewedWeek, today: today)
         guard days > 0 else { return nil }
-        return Duration.approxHours(minutes: Double(weekTotalMinutes) / Double(days))
+        var average = Double(weekTotalMinutes) / Double(days)
+        if WeekMath.isSameWeek(viewedWeek, today), days > 1 {
+            let past = store.totalMinutes(from: viewedWeek, to: today)
+            average = max(average, Double(past) / Double(days - 1))
+        }
+        return Duration.approxHours(minutes: average)
     }
 
     /// The total in the window's subtitle: the week's, or the stats page's span.
