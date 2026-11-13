@@ -173,9 +173,6 @@ struct ContentView: View {
         }
         .frame(minWidth: 460, minHeight: 620)
         .navigationTitle(showingStats ? stats.title : WeekMath.weekLabel(for: viewedWeek))
-        .navigationSubtitle(shownTotalMinutes == 0
-                            ? "Nothing logged"
-                            : "\(Duration.format(minutes: shownTotalMinutes)) logged")
         .toolbar { weekToolbar }
         // The pages that take the week's place take turns.
         .modifier(PagesTakeTurns(pages: [$showingStats, $showingFriends, $showingGlobal, $showingSettings]))
@@ -555,13 +552,6 @@ struct ContentView: View {
             average = max(average, Double(past) / Double(days - 1))
         }
         return Duration.approxHours(minutes: average)
-    }
-
-    /// The total in the window's subtitle: the week's, or the stats page's span.
-    private var shownTotalMinutes: Int {
-        showingStats
-            ? store.totalMinutes(from: stats.start, to: stats.endExclusive)
-            : weekTotalMinutes
     }
 
     /// Every activity, not just this week's: the chart keeps the same slices from week
