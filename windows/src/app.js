@@ -635,10 +635,30 @@ function LogPanel({ week, onClose }) {
 
   // Entries whose activity is gone count nowhere else, so they're left out here too.
   const byID = new Map(store.activities.map((a) => [a.id, a]));
-  const lines = store.entriesIn(week, W.weekEnd(week))
+  const sorted = store.entriesIn(week, W.weekEnd(week))
     .filter((e) => byID.has(e.activityID))
-    .map((e) => ({ entry: e, activity: byID.get(e.activityID), added: new Date(e.createdAt) }))
+    .map((e) => ({ entry: e, added: new Date(e.createdAt) }))
     .sort((a, b) => b.added - a.added);
+
+  // Clicks in a row on the same task, for the same day, stack into one line, so ten
+  // clicks of +1h read as +10h. Typed-in totals and time taken off stay on their own
+  // line, so a correction is never hidden inside the time it corrects.
+  const lines = [];
+  for (const { entry, added } of sorted) {
+    const last = lines.at(-1);
+    const stacks = last && !last.entry.isAdjustment && !entry.isAdjustment
+      && entry.activityID === last.entry.activityID && entry.day === last.entry.day
+      && (entry.minutes < 0) === (last.entry.minutes < 0)
+      && W.startOfDay(added).getTime() === W.startOfDay(last.added).getTime();
+    if (stacks) {
+      last.entries.push(entry);
+      last.minutes += entry.minutes;
+      last.oldest = added;
+    } else {
+      lines.push({ entry, entries: [entry], minutes: entry.minutes, added, oldest: added,
+        activity: byID.get(entry.activityID) });
+    }
+  }
 
   // Consecutive lines added on the same day, under that day.
   const sections = [];
@@ -656,19 +676,21 @@ function LogPanel({ week, onClose }) {
         : html`<div class="log-scroll">
           ${sections.map((s) => html`
             <div key=${s.day} class="log-day">${dayTitle(new Date(s.day))}</div>
-            ${s.lines.map(({ entry, activity, added }) => html`
+            ${s.lines.map(({ entry, entries, minutes, activity, added, oldest }) => html`
               <div key=${entry.id} class="log-row">
                 <span class="dot" style=${{ background: slotColor(activity.colorSlot) }} />
                 <div class="log-what">
                   <span class="name">${activity.name}</span>
-                  <span class="caption">${logDetail(entry, added)}</span>
+                  <span class="caption">${logDetail(entry, added, oldest)}</span>
                 </div>
                 <span class="spacer" />
-                <span class="num log-amount ${entry.minutes < 0 ? 'negative' : ''}">
-                  ${(entry.minutes < 0 ? '−' : '+') + Duration.format(Math.abs(entry.minutes))}</span>
-                <${MoveDay} entry=${entry} />
-                <button class="log-delete" onClick=${() => store.deleteEntry(entry.id)}
-                  title="Delete this entry (Ctrl+Z brings it back)"><${TrashGlyph} /></button>
+                <span class="num log-amount ${minutes < 0 ? 'negative' : ''}">
+                  ${(minutes < 0 ? '−' : '+') + Duration.format(Math.abs(minutes))}</span>
+                <${MoveDay} entry=${entry} ids=${entries.map((e) => e.id)} />
+                <button class="log-delete" onClick=${() => store.deleteEntries(entries.map((e) => e.id))}
+                  title=${entries.length > 1
+                    ? `Delete these ${entries.length} entries (Ctrl+Z brings them back)`
+                    : 'Delete this entry (Ctrl+Z brings it back)'}><${TrashGlyph} /></button>
               </div>`)}`)}
         </div>`}
     </div>
@@ -679,7 +701,7 @@ function LogPanel({ week, onClose }) {
  * Moves an entry to another day of its own week. Days still to come are left out: time
  * can't have been spent on them yet. A native select under the glyph gives the menu.
  */
-function MoveDay({ entry }) {
+function MoveDay({ entry, ids }) {
   const store = useStore();
   const today = W.startOfDay(new Date());
   const start = W.weekStart(W.DayStamp.parse(entry.day));
@@ -687,15 +709,17 @@ function MoveDay({ entry }) {
   return html`
     <label class="log-delete log-move" title="Move this entry to another day">
       <${SmallCalendarGlyph} />
-      <select value=${entry.day} onChange=${(e) => store.moveEntry(entry.id, W.DayStamp.parse(e.target.value))}>
+      <select value=${entry.day} onChange=${(e) => store.moveEntries(ids, W.DayStamp.parse(e.target.value))}>
         ${days.map((d) => html`<option key=${d.getTime()} value=${W.DayStamp.string(d)}>${dayTitle(d)}</option>`)}
       </select>
     </label>`;
 }
 
 /** When it was added, and anything that sets it apart. */
-function logDetail(entry, added) {
-  const parts = [added.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })];
+function logDetail(entry, added, oldest = added) {
+  // A stack shows when its first and last entries were added.
+  const time = (d) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const parts = [time(oldest) === time(added) ? time(added) : `${time(oldest)}–${time(added)}`];
   const day = W.DayStamp.parse(entry.day);
   if (day.getTime() !== W.startOfDay(added).getTime()) {
     // A weekday alone only says which day within the week it was added in.

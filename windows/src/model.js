@@ -392,19 +392,25 @@ export class Store {
 
   /** Takes back one logged amount, from the log. */
   deleteEntry(id) {
-    if (!this.entries.some((e) => e.id === id)) return;
+    this.deleteEntries([id]);
+  }
+
+  /** Several at once, as one step for Ctrl+Z. */
+  deleteEntries(ids) {
+    const set = new Set(ids);
+    if (!this.entries.some((e) => set.has(e.id))) return;
     this.#mutate(() => {
-      this.entries = this.entries.filter((e) => e.id !== id);
+      this.entries = this.entries.filter((e) => !set.has(e.id));
     });
   }
 
-  /** Puts an entry on another day; when it was added stays. */
-  moveEntry(id, day) {
+  /** Puts entries on another day; when they were added stays. */
+  moveEntries(ids, day) {
     const stamp = DayStamp.string(day);
-    const entry = this.entries.find((e) => e.id === id);
-    if (!entry || entry.day === stamp) return;
+    const set = new Set(ids);
+    if (!this.entries.some((e) => set.has(e.id) && e.day !== stamp)) return;
     this.#mutate(() => {
-      this.entries = this.entries.map((e) => (e.id === id ? { ...e, day: stamp } : e));
+      this.entries = this.entries.map((e) => (set.has(e.id) ? { ...e, day: stamp } : e));
     });
   }
 
