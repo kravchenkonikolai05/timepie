@@ -298,6 +298,15 @@ final class Store {
         mutate { entries.removeAll { $0.id == id } }
     }
 
+    /// Puts an entry on another day, for time added on the day it was typed in that
+    /// belongs to an earlier one. Only the day changes; when it was added stays.
+    func moveEntry(_ id: UUID, to day: Date) {
+        let day = WeekMath.startOfDay(day)
+        guard let index = entries.firstIndex(where: { $0.id == id }),
+              entries[index].day != day else { return }
+        mutate { entries[index].day = day }
+    }
+
     func addActivity(named name: String, inWeek weekStart: Date) {
         mutate {
             // Only colours on screen in this week are off the table, so older, unrelated

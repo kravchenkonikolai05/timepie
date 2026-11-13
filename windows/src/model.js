@@ -398,6 +398,16 @@ export class Store {
     });
   }
 
+  /** Puts an entry on another day; when it was added stays. */
+  moveEntry(id, day) {
+    const stamp = DayStamp.string(day);
+    const entry = this.entries.find((e) => e.id === id);
+    if (!entry || entry.day === stamp) return;
+    this.#mutate(() => {
+      this.entries = this.entries.map((e) => (e.id === id ? { ...e, day: stamp } : e));
+    });
+  }
+
   addActivity(name, inWeek) {
     this.#mutate(() => {
       const taken = this.activitiesForWeek(inWeek).map((a) => a.colorSlot);

@@ -100,6 +100,8 @@ struct LogView: View {
                 .monospacedDigit()
                 .foregroundStyle(entry.minutes < 0 ? Ink.muted : Ink.secondary)
 
+            dayMenu(for: entry)
+
             Button {
                 withAnimation(Motion.snappy) { store.deleteEntry(entry.id) }
             } label: {
@@ -119,6 +121,43 @@ struct LogView: View {
                 .fill(hoveredID == entry.id ? Color.primary.opacity(0.06) : .clear)
         )
         .onHover { hoveredID = $0 ? entry.id : (hoveredID == entry.id ? nil : hoveredID) }
+    }
+
+    /// Moves the entry to another day of its own week. Days still to come are left out:
+    /// time can't have been spent on them yet.
+    private func dayMenu(for entry: Entry) -> some View {
+        let today = WeekMath.startOfDay(Date())
+        let days = WeekMath.daysOfWeek(containing: entry.day).filter { $0 <= today }
+        return Menu {
+            ForEach(days, id: \.self) { day in
+                Button {
+                    withAnimation(Motion.snappy) { store.moveEntry(entry.id, to: day) }
+                } label: {
+                    if Calendar.current.isDate(day, inSameDayAs: entry.day) {
+                        Label(menuTitle(day), systemImage: "checkmark")
+                    } else {
+                        Text(menuTitle(day))
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "calendar")
+                .font(.system(size: 11))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .foregroundStyle(hoveredID == entry.id ? Ink.secondary : Ink.muted.opacity(0.6))
+        .help("Move this entry to another day")
+    }
+
+    private func menuTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return "Today" }
+        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        return day.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
     }
 
     /// When it was added, and anything that sets it apart: a typed-in total, or time

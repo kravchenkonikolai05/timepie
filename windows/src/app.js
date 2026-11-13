@@ -69,6 +69,9 @@ const LogGlyph = () => html`<svg width="16" height="16" viewBox="0 0 16 16" fill
 const TrashGlyph = () => html`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
   stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 3 H10.5 M4.5 3 V1.5 H7.5 V3" />
   <path d="M2.5 3 L3.2 10.5 H8.8 L9.5 3" /></svg>`;
+const SmallCalendarGlyph = () => html`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
+  stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="9" height="8" rx="1.2" />
+  <path d="M1.5 5 H10.5 M4 1.2 V3.4 M8 1.2 V3.4" /></svg>`;
 const PlusCircle = () => html`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2">
   <circle cx="7" cy="7" r="6" /><path d="M7 4 V10 M4 7 H10" stroke-linecap="round" /></svg>`;
 
@@ -663,12 +666,31 @@ function LogPanel({ week, onClose }) {
                 <span class="spacer" />
                 <span class="num log-amount ${entry.minutes < 0 ? 'negative' : ''}">
                   ${(entry.minutes < 0 ? '−' : '+') + Duration.format(Math.abs(entry.minutes))}</span>
+                <${MoveDay} entry=${entry} />
                 <button class="log-delete" onClick=${() => store.deleteEntry(entry.id)}
                   title="Delete this entry (Ctrl+Z brings it back)"><${TrashGlyph} /></button>
               </div>`)}`)}
         </div>`}
     </div>
   `;
+}
+
+/**
+ * Moves an entry to another day of its own week. Days still to come are left out: time
+ * can't have been spent on them yet. A native select under the glyph gives the menu.
+ */
+function MoveDay({ entry }) {
+  const store = useStore();
+  const today = W.startOfDay(new Date());
+  const start = W.weekStart(W.DayStamp.parse(entry.day));
+  const days = Array.from({ length: 7 }, (_, i) => W.addDays(i, start)).filter((d) => d <= today);
+  return html`
+    <label class="log-delete log-move" title="Move this entry to another day">
+      <${SmallCalendarGlyph} />
+      <select value=${entry.day} onChange=${(e) => store.moveEntry(entry.id, W.DayStamp.parse(e.target.value))}>
+        ${days.map((d) => html`<option key=${d.getTime()} value=${W.DayStamp.string(d)}>${dayTitle(d)}</option>`)}
+      </select>
+    </label>`;
 }
 
 /** When it was added, and anything that sets it apart. */
