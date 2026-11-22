@@ -150,7 +150,10 @@
         '<span class="clock">' + clock(seconds) + '</span></span>';
     }
 
-    const color = (slot) => 'var(--c' + (slot >= 0 && slot < 8 ? slot : 8) + ')';
+    // Slots from 0x1000000 on are custom colours: 0x1000000 plus 0xRRGGBB.
+    const color = (slot) => slot >= 0x1000000 && slot <= 0x1FFFFFF
+      ? '#' + (slot - 0x1000000).toString(16).padStart(6, '0')
+      : 'var(--c' + (slot >= 0 && slot < 8 ? slot : 8) + ')';
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
     function donut(slices, size) {

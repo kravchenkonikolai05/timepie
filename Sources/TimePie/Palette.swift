@@ -16,6 +16,11 @@ import AppKit
 ///
 /// There is no ninth hue. A generated one is indistinguishable from an existing slot
 /// under CVD, so overflow activities take neutral grey and lean on their row.
+///
+/// Past the palette, a person can pick any colour they like in the colour window.
+/// Such a custom colour still travels as one `Int` slot — `customBase` plus its 24-bit
+/// sRGB value — so storage, friends and charts carry it without knowing it is special.
+/// It is the same in light and dark mode, and it gets none of the palette's CVD checks.
 enum Palette {
     static let lightHexes = [
         "#2a78d6", // 1 blue
@@ -38,8 +43,25 @@ enum Palette {
 
     static var slotCount: Int { lightHexes.count }
 
+    /// Slots from here on are custom colours: `customBase + 0xRRGGBB`.
+    static let customBase = 0x100_0000
+
+    static func isCustom(_ slot: Int) -> Bool {
+        slot >= customBase && slot <= customBase + 0xFF_FFFF
+    }
+
+    static func customSlot(rgb: Int) -> Int { customBase + (rgb & 0xFF_FFFF) }
+
+    /// The slot's colour as 0xRRGGBB, taking the light-mode value for palette slots.
+    static func rgb(slot: Int) -> Int {
+        if isCustom(slot) { return slot - customBase }
+        let hex = (slot >= 0 && slot < lightHexes.count) ? lightHexes[slot] : overflowHex
+        return Int(hex.dropFirst(), radix: 16) ?? 0
+    }
+
     static func color(slot: Int) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+        if isCustom(slot) { return Color(nsColor: NSColor(rgb: slot - customBase)) }
+        return Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             let hexes = isDark ? darkHexes : lightHexes
             let hex = (slot >= 0 && slot < hexes.count) ? hexes[slot] : overflowHex
@@ -101,6 +123,15 @@ extension View {
 }
 
 extension NSColor {
+    convenience init(rgb v: Int) {
+        self.init(
+            srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
+            green: CGFloat((v >> 8) & 0xFF) / 255,
+            blue: CGFloat(v & 0xFF) / 255,
+            alpha: 1
+        )
+    }
+
     convenience init(hex: String) {
         let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         var v: UInt64 = 0

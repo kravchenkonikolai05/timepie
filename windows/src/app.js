@@ -20,7 +20,9 @@ api.onUndo(() => {
 });
 
 const isTyping = () => ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
-const slotColor = (slot) => `var(--c${slot >= 0 && slot < SLOT_COUNT ? slot : SLOT_COUNT})`;
+const slotColor = (slot) => W.isCustom(slot)
+  ? W.hexOf(W.slotRGB(slot))
+  : `var(--c${slot >= 0 && slot < SLOT_COUNT ? slot : SLOT_COUNT})`;
 /** Stops a double-click on a control from also toggling the row's timer. */
 const stop = (e) => e.stopPropagation();
 
@@ -72,6 +74,12 @@ const TrashGlyph = () => html`<svg width="12" height="12" viewBox="0 0 12 12" fi
 const SmallCalendarGlyph = () => html`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor"
   stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="9" height="8" rx="1.2" />
   <path d="M1.5 5 H10.5 M4 1.2 V3.4 M8 1.2 V3.4" /></svg>`;
+const PaletteGlyph = () => html`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2">
+  <path d="M7 1.5a5.5 5.5 0 1 0 0 11c.8 0 1.2-.5 1.2-1.1 0-.8-.7-1-.7-1.7 0-.6.5-1 1.1-1h1.5a2.4 2.4 0 0 0 2.4-2.4C12.5 3.6 10.1 1.5 7 1.5Z" />
+  <circle cx="4.3" cy="6.3" r=".8" fill="currentColor" stroke="none" /><circle cx="6.2" cy="4.1" r=".8" fill="currentColor" stroke="none" />
+  <circle cx="9.1" cy="4.4" r=".8" fill="currentColor" stroke="none" /></svg>`;
+const EyedropperGlyph = () => html`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"
+  stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 3.4 10.6 5.8M9.4 2.2a1.7 1.7 0 0 1 2.4 2.4l-1.2 1.2-2.4-2.4 1.2-1.2ZM8.8 4.6 3.3 10.1 2.5 12.5l2.4-.8 5.5-5.5" /></svg>`;
 const PlusCircle = () => html`<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2">
   <circle cx="7" cy="7" r="6" /><path d="M7 4 V10 M4 7 H10" stroke-linecap="round" /></svg>`;
 
@@ -193,6 +201,7 @@ function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (isTyping() || e.ctrlKey || e.altKey || e.metaKey) return;
+      if (document.querySelector('.color-window')) return;
       if (e.key === 'ArrowLeft') step(-1);
       if (e.key === 'ArrowRight') step(1);
       if (e.key === 'Escape' && !document.querySelector('.pages-menu-list, .log-panel')) {
@@ -916,6 +925,7 @@ function ActivityRow(props) {
   const [editingHours, setEditingHours] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [pickingColor, setPickingColor] = useState(false);
+  const [showingColorWindow, setShowingColorWindow] = useState(false);
 
   const onContextMenu = async (e) => {
     e.preventDefault();
@@ -939,7 +949,14 @@ function ActivityRow(props) {
         ${pickingColor && html`
           <${ColorSwatchPicker} current=${activity.colorSlot} taken=${takenSlots}
             onClose=${() => setPickingColor(false)}
-            onPick=${(slot) => { props.onSetColor(slot); setPickingColor(false); }} />`}
+            onPick=${(slot) => { props.onSetColor(slot); setPickingColor(false); }}
+            onMore=${() => { setPickingColor(false); setShowingColorWindow(true); }} />`}
+        ${showingColorWindow && html`
+          <${Portal}>
+            <${ColorWindow} initial=${activity.colorSlot} taken=${takenSlots}
+              onCancel=${() => setShowingColorWindow(false)}
+              onDone=${(slot) => { props.onSetColor(slot); setShowingColorWindow(false); }} />
+          <//>`}
 
         ${editingName
           ? html`<${InlineField} initial=${activity.name}
@@ -1071,8 +1088,25 @@ function InlineField({ initial, onCommit, onCancel }) {
     onBlur=${(e) => finish(() => onCommit(e.currentTarget.value))} />`;
 }
 
-/** The eight validated palette slots plus the neutral overflow, as pickable swatches. */
-function ColorSwatchPicker({ current, taken, onPick, onClose }) {
+/** One round, clickable colour. A ring marks the current one; a dot, one another activity uses. */
+function Swatch({ slot, isCurrent, isTaken, title, onPick }) {
+  return html`
+    <button class="swatch ${isCurrent ? 'current' : ''}" onClick=${() => onPick(slot)}
+      title=${title ?? W.hexOf(W.slotRGB(slot))}>
+      <span class="fill" style=${{ background: slotColor(slot) }} />
+      ${isTaken && !isCurrent && html`<span class="taken" />`}
+    </button>`;
+}
+
+const swatchTitle = (slot) => slot === SLOT_COUNT ? 'Neutral grey (past the eight-colour palette)'
+  : W.isCustom(slot) ? `Custom colour ${W.hexOf(W.slotRGB(slot))}`
+  : `Palette colour ${slot + 1}`;
+
+/**
+ * The eight validated palette slots plus the neutral overflow, as pickable swatches,
+ * then recent custom colours and the way into the full colour window.
+ */
+function ColorSwatchPicker({ current, taken, onPick, onMore, onClose }) {
   const ref = useRef();
   useEffect(() => {
     const away = (e) => !ref.current?.parentElement.contains(e.target) && onClose();
@@ -1085,20 +1119,259 @@ function ColorSwatchPicker({ current, taken, onPick, onClose }) {
     };
   }, []);
 
+  // Recent custom colours, with this activity's own first if it has one.
+  const recents = recentColors();
+  const customs = W.isCustom(current) && !recents.includes(current)
+    ? [current, ...recents].slice(0, RECENT_LIMIT) : recents;
+
   return html`
     <div class="popover" ref=${ref} onDblClick=${stop}>
       <div class="caption">Colour</div>
       <div class="swatches">
         ${Array.from({ length: SLOT_COUNT + 1 }, (_, slot) => html`
-          <button class="swatch ${slot === current ? 'current' : ''}" onClick=${() => onPick(slot)}
-            title=${slot === SLOT_COUNT ? 'Neutral grey (past the eight-colour palette)' : `Palette colour ${slot + 1}`}>
-            <span class="fill" style=${{ background: slotColor(slot) }} />
-            ${taken.has(slot) && slot !== current && html`<span class="taken" />`}
-          </button>`)}
+          <${Swatch} slot=${slot} isCurrent=${slot === current} isTaken=${taken.has(slot)}
+            title=${swatchTitle(slot)} onPick=${onPick} />`)}
       </div>
+      ${customs.length > 0 && html`
+        <div class="swatches">
+          ${customs.map((slot) => html`
+            <${Swatch} key=${slot} slot=${slot} isCurrent=${slot === current} isTaken=${taken.has(slot)}
+              title=${swatchTitle(slot)} onPick=${onPick} />`)}
+        </div>`}
       <div class="hint">A dot marks a colour another activity already uses.</div>
+      <div class="popover-divider" />
+      <button class="more-colours" onClick=${onMore} title="Pick any colour from a grid, a spectrum or sliders">
+        <${PaletteGlyph} /> More Colours…
+      </button>
     </div>
   `;
+}
+
+// MARK: - Colour window
+
+/** Small per-computer preferences. Storage can be missing or blocked; then nothing is kept. */
+const prefs = {
+  get(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* not kept */ }
+  },
+};
+
+/** One popover row's worth, the same width as the palette row. */
+const RECENT_LIMIT = 9;
+const recentColors = () => {
+  const list = prefs.get('recentCustomColors', []);
+  return Array.isArray(list) ? list.filter(W.isCustom) : [];
+};
+function rememberColor(slot) {
+  if (!W.isCustom(slot)) return;
+  prefs.set('recentCustomColors', [slot, ...recentColors().filter((s) => s !== slot)].slice(0, RECENT_LIMIT));
+}
+
+/** Ready-made shades: a row of greys, then twelve hues running from pale to deep. */
+const GRID_ROWS = (() => {
+  const greys = Array.from({ length: 12 }, (_, i) => {
+    const g = Math.round(((11 - i) / 11) * 255);
+    return (g << 16) | (g << 8) | g;
+  });
+  const shades = [[0.2, 1], [0.35, 1], [0.5, 1], [0.7, 1], [0.9, 1], [1, 0.85], [1, 0.7], [1, 0.55], [1, 0.4]];
+  return [greys, ...shades.map(([s, v]) => Array.from({ length: 12 }, (_, i) => W.rgbFromHSV({ h: i / 12, s, v })))];
+})();
+
+const COLOR_MODES = ['Grid', 'Spectrum', 'Sliders'];
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+
+/** Renders its children at the end of <body>, out from under the row's own stacking. */
+function Portal({ children }) {
+  const host = useRef(null);
+  if (!host.current) {
+    host.current = document.createElement('div');
+    document.body.appendChild(host.current);
+  }
+  useLayoutEffect(() => { render(children, host.current); });
+  useEffect(() => () => { render(null, host.current); host.current.remove(); }, []);
+  return null;
+}
+
+/**
+ * The full colour window, opened from "More Colours…" in the row's colour popover.
+ *
+ * Laid out like the pickers in drawing apps: a big grid of ready-made shades, a spectrum
+ * to drag through, and RGB sliders, with a hex field, a screen eyedropper, the palette
+ * and recent colours always in reach under them. (Port of ColorWindow.swift.)
+ */
+function ColorWindow({ initial, taken, onDone, onCancel }) {
+  const [mode, setModeState] = useState(() => {
+    const m = prefs.get('colorWindowMode', 'Grid');
+    return COLOR_MODES.includes(m) ? m : 'Grid';
+  });
+  // Kept as hue, saturation and brightness, so dragging to black or grey keeps the hue.
+  const [hsv, setHSV] = useState(() => W.hsvFromRGB(W.slotRGB(initial)));
+  // Set while the choice is a palette slot, so it stays one (with its own dark shade).
+  const [paletteSlot, setPaletteSlot] = useState(W.isCustom(initial) ? null : initial);
+  const [hexDraft, setHexDraft] = useState(() => W.hexOf(W.slotRGB(initial)));
+  const [recents] = useState(recentColors);
+  const rgb = W.rgbFromHSV(hsv);
+  const chosen = paletteSlot ?? W.customSlot(rgb);
+  const chosenRef = useRef(chosen);
+  chosenRef.current = chosen;
+
+  const setMode = (m) => { setModeState(m); prefs.set('colorWindowMode', m); };
+  const set = (next) => {
+    setHSV(next);
+    setPaletteSlot(null);
+    setHexDraft(W.hexOf(W.rgbFromHSV(next)));
+  };
+  const pick = (slot) => {
+    const v = W.slotRGB(slot);
+    setHSV(W.hsvFromRGB(v));
+    setPaletteSlot(W.isCustom(slot) ? null : slot);
+    setHexDraft(W.hexOf(v));
+  };
+  const commitHex = () => {
+    const v = W.parseHex(hexDraft);
+    if (v === null) setHexDraft(W.hexOf(rgb)); // A typo changes nothing.
+    else if (v === rgb) setHexDraft(W.hexOf(v)); // Untouched: a palette slot stays one.
+    else set(W.hsvFromRGB(v));
+  };
+  const done = () => {
+    rememberColor(chosenRef.current);
+    onDone(chosenRef.current);
+  };
+  const sample = async () => {
+    try {
+      const { sRGBHex } = await new window.EyeDropper().open();
+      const v = W.parseHex(sRGBHex);
+      if (v !== null) set(W.hsvFromRGB(v));
+    } catch { /* Escape pressed: nothing picked. */ }
+  };
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+      if (e.key === 'Enter' && !isTyping()) { e.preventDefault(); done(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const section = (title, slots) => html`
+    <div class="cw-section">
+      <div class="caption">${title}</div>
+      <div class="swatches">
+        ${slots.map((slot) => html`
+          <${Swatch} key=${slot} slot=${slot} isCurrent=${slot === chosen}
+            isTaken=${taken.has(slot) && slot !== initial}
+            title=${slot === SLOT_COUNT ? 'Neutral grey' : undefined} onPick=${pick} />`)}
+      </div>
+    </div>`;
+
+  return html`
+    <div class="modal-backdrop" onMouseDown=${(e) => e.target === e.currentTarget && onCancel()}>
+      <div class="color-window" role="dialog" aria-label="Colour">
+        <div class="cw-head">
+          <span class="cw-title">Colour</span>
+          <div class="cw-preview" title="Before and after">
+            <span style=${{ background: slotColor(initial) }} />
+            <span style=${{ background: slotColor(chosen) }} />
+          </div>
+        </div>
+
+        <div class="segmented">
+          ${COLOR_MODES.map((m) => html`
+            <button class=${m === mode ? 'on' : ''} onClick=${() => setMode(m)}>${m}</button>`)}
+        </div>
+
+        <div class="cw-body">
+          ${mode === 'Grid' && html`<${ColorGrid} selected=${paletteSlot === null ? rgb : null} onPick=${(v) => set(W.hsvFromRGB(v))} />`}
+          ${mode === 'Spectrum' && html`<${SpectrumPad} hsv=${hsv} onChange=${set} />`}
+          ${mode === 'Sliders' && html`<${RGBSliders} rgb=${rgb} onChange=${(v) => set(W.hsvFromRGB(v))} />`}
+        </div>
+
+        <div class="cw-hex">
+          <label for="cw-hex">Hex</label>
+          <input id="cw-hex" class="field mono" value=${hexDraft} spellcheck="false" maxLength="7"
+            onInput=${(e) => setHexDraft(e.currentTarget.value)}
+            onKeyDown=${(e) => { if (e.key === 'Enter') { e.stopPropagation(); commitHex(); } }}
+            onBlur=${commitHex} />
+          <span class="spacer" />
+          ${'EyeDropper' in window && html`
+            <button class="btn icon" onClick=${sample} title="Pick up a colour from anywhere on the screen">
+              <${EyedropperGlyph} />
+            </button>`}
+        </div>
+
+        ${section('Palette', Array.from({ length: SLOT_COUNT + 1 }, (_, i) => i))}
+        ${recents.length > 0 && section('Recent', recents)}
+
+        <div class="cw-actions">
+          <button class="btn" onClick=${onCancel}>Cancel</button>
+          <button class="btn primary" onClick=${done}>Done</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function ColorGrid({ selected, onPick }) {
+  return html`
+    <div class="cw-grid">
+      ${GRID_ROWS.flat().map((v) => html`
+        <button class="cw-cell ${v === selected ? 'on' : ''}" style=${{ background: W.hexOf(v) }}
+          title=${W.hexOf(v)} onClick=${() => onPick(v)} />`)}
+    </div>`;
+}
+
+/** Follows a pointer pressed on `el`, giving its position across and down as 0…1. */
+function trackPointer(e, apply) {
+  const el = e.currentTarget;
+  el.setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    const r = el.getBoundingClientRect();
+    apply(clamp01((ev.clientX - r.left) / r.width), clamp01((ev.clientY - r.top) / r.height));
+  };
+  move(e);
+  el.onpointermove = move;
+  el.onpointerup = el.onpointercancel = () => { el.onpointermove = null; };
+}
+
+/** Saturation across, brightness down, for the hue chosen on the bar beneath. */
+function SpectrumPad({ hsv, onChange }) {
+  const pure = W.hexOf(W.rgbFromHSV({ h: hsv.h, s: 1, v: 1 }));
+  return html`
+    <div class="cw-spectrum">
+      <div class="cw-pad" style=${{ backgroundColor: pure }}
+        onPointerDown=${(e) => trackPointer(e, (x, y) => onChange({ h: hsv.h, s: x, v: 1 - y }))}>
+        <span class="cw-knob" style=${{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`,
+          background: W.hexOf(W.rgbFromHSV(hsv)) }} />
+      </div>
+      <div class="cw-hue"
+        onPointerDown=${(e) => trackPointer(e, (x) => onChange({ ...hsv, h: Math.min(x, 0.999) }))}>
+        <span class="cw-knob" style=${{ left: `${hsv.h * 100}%`, top: '50%', background: pure }} />
+      </div>
+    </div>`;
+}
+
+/** Red, green and blue, 0 to 255 each. Each track shows where that channel would take the colour. */
+function RGBSliders({ rgb, onChange }) {
+  const channel = (name, shift) => {
+    const value = (rgb >> shift) & 0xFF;
+    const base = rgb & ~(0xFF << shift);
+    const track = `linear-gradient(to right, ${W.hexOf(base)}, ${W.hexOf(base | (0xFF << shift))})`;
+    return html`
+      <label class="cw-slider">
+        <span class="name">${name}</span>
+        <input type="range" min="0" max="255" value=${value} style=${{ background: track }}
+          onInput=${(e) => onChange(base | (Number(e.currentTarget.value) << shift))} />
+        <span class="num">${value}</span>
+      </label>`;
+  };
+  return html`<div class="cw-sliders">${channel('Red', 16)}${channel('Green', 8)}${channel('Blue', 0)}</div>`;
 }
 
 /** The inline `+` below the rows — a field you type into, never a dialog. */

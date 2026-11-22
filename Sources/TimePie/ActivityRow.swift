@@ -40,6 +40,7 @@ struct ActivityRow: View {
     @State private var editingName = false
     @State private var nameDraft = ""
     @State private var pickingColor = false
+    @State private var showingColorWindow = false
     @FocusState private var hoursFocused: Bool
     @FocusState private var nameFocused: Bool
     @Environment(\.endEditing) private var endEditing
@@ -107,10 +108,24 @@ struct ActivityRow: View {
             .buttonStyle(.plain)
             .help("Change colour")
             .popover(isPresented: $pickingColor, arrowEdge: .bottom) {
-                ColorSwatchPicker(current: colorSlot, taken: takenSlots) { slot in
+                ColorSwatchPicker(current: colorSlot, taken: takenSlots, onPick: { slot in
                     onSetColor(slot)
                     pickingColor = false
-                }
+                }, onMore: {
+                    pickingColor = false
+                    // Let the popover finish closing before the sheet slides down.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        showingColorWindow = true
+                    }
+                })
+            }
+            .sheet(isPresented: $showingColorWindow) {
+                ColorWindow(initialSlot: colorSlot, taken: takenSlots, onDone: { slot in
+                    onSetColor(slot)
+                    showingColorWindow = false
+                }, onCancel: {
+                    showingColorWindow = false
+                })
             }
 
             if editingName {
@@ -304,11 +319,20 @@ private struct GrabCursor: ViewModifier {
     }
 }
 
-/// The eight validated palette slots plus the neutral overflow, as pickable swatches.
+/// The eight validated palette slots plus the neutral overflow, as pickable swatches,
+/// then recent custom colours and the way into the full colour window.
 struct ColorSwatchPicker: View {
     let current: Int
     let taken: Set<Int>
     let onPick: (Int) -> Void
+    let onMore: () -> Void
+
+    /// Recent custom colours, with this activity's own first if it has one.
+    private var customs: [Int] {
+        let recents = CustomColors.recents
+        guard Palette.isCustom(current), !recents.contains(current) else { return recents }
+        return Array(([current] + recents).prefix(CustomColors.limit))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -322,38 +346,39 @@ struct ColorSwatchPicker: View {
                 }
             }
 
+            if !customs.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(customs, id: \.self) { slot in
+                        swatch(slot)
+                    }
+                }
+            }
+
             Text("A dot marks a colour another activity already uses.")
                 .font(.system(size: 10))
                 .foregroundStyle(Ink.muted)
+
+            Divider()
+
+            Button(action: onMore) {
+                Label("More Colours…", systemImage: "paintpalette")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Ink.primary)
+            .help("Pick any colour from a grid, a spectrum or sliders")
         }
         .padding(12)
     }
 
     private func swatch(_ slot: Int) -> some View {
-        Button { onPick(slot) } label: {
-            Circle()
-                .fill(Palette.color(slot: slot))
-                .frame(width: 18, height: 18)
-                .overlay(
-                    Circle()
-                        .strokeBorder(Ink.primary.opacity(slot == current ? 0.85 : 0),
-                                      lineWidth: 2)
-                        .padding(-3)
-                )
-                .overlay(alignment: .bottom) {
-                    if taken.contains(slot) && slot != current {
-                        Circle()
-                            .fill(Ink.muted)
-                            .frame(width: 3, height: 3)
-                            .offset(y: 6)
-                    }
-                }
-                .padding(3)
-                .contentShape(Rectangle())
+        Swatch(slot: slot, isCurrent: slot == current, isTaken: taken.contains(slot),
+               help: slot == Palette.slotCount ? "Neutral grey (past the eight-colour palette)"
+                   : Palette.isCustom(slot) ? "Custom colour \(HSV.hex(Palette.rgb(slot: slot)))"
+                   : "Palette colour \(slot + 1)") {
+            onPick(slot)
         }
-        .buttonStyle(.plain)
-        .help(slot == Palette.slotCount ? "Neutral grey (past the eight-colour palette)"
-                                        : "Palette colour \(slot + 1)")
     }
 }
 

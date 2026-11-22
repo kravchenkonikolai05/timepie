@@ -143,6 +143,60 @@ export function nextSlot(taken) {
   return SLOT_COUNT;
 }
 
+// MARK: - Custom colours
+
+/**
+ * Past the palette, any colour can be picked in the colour window. It still travels as
+ * one integer slot — CUSTOM_BASE plus its 24-bit sRGB value — so storage, friends and
+ * charts carry it unchanged. It is the same in light and dark mode. (As Palette.swift.)
+ */
+export const CUSTOM_BASE = 0x1000000;
+
+export const isCustom = (slot) => Number.isInteger(slot) && slot >= CUSTOM_BASE && slot <= CUSTOM_BASE + 0xFFFFFF;
+export const customSlot = (rgb) => CUSTOM_BASE + (rgb & 0xFFFFFF);
+
+/** The light-mode palette, the same values as --c0…--c8 in styles.css. */
+const LIGHT_HEXES = [0x2a78d6, 0xeb6834, 0x1baf7a, 0xeda100, 0xe87ba4, 0x008300, 0x4a3aa7, 0xe34948];
+const OVERFLOW_RGB = 0x898781;
+
+/** The slot's colour as 0xRRGGBB, taking the light-mode value for palette slots. */
+export function slotRGB(slot) {
+  if (isCustom(slot)) return slot - CUSTOM_BASE;
+  return slot >= 0 && slot < SLOT_COUNT ? LIGHT_HEXES[slot] : OVERFLOW_RGB;
+}
+
+export const hexOf = (rgb) => '#' + (rgb & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase();
+
+/** Reads "#2A78D6", "2a78d6" or the short "#29D". Null for anything else. */
+export function parseHex(text) {
+  let s = String(text).trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(s)) s = [...s].map((c) => c + c).join('');
+  return /^[0-9a-f]{6}$/i.test(s) ? parseInt(s, 16) : null;
+}
+
+/** Hue, saturation and brightness, each 0…1. */
+export function hsvFromRGB(rgb) {
+  const r = ((rgb >> 16) & 0xFF) / 255, g = ((rgb >> 8) & 0xFF) / 255, b = (rgb & 0xFF) / 255;
+  const hi = Math.max(r, g, b), lo = Math.min(r, g, b), d = hi - lo;
+  let h = 0;
+  if (d > 0) {
+    if (hi === r) h = (g - b) / d;
+    else if (hi === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+    if (h < 0) h += 1;
+  }
+  return { h, s: hi === 0 ? 0 : d / hi, v: hi };
+}
+
+export function rgbFromHSV({ h, s, v }) {
+  const sector = Math.floor(h * 6), f = h * 6 - sector;
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  const [r, g, b] = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][((sector % 6) + 6) % 6];
+  const byte = (x) => Math.min(255, Math.max(0, Math.round(x * 255)));
+  return (byte(r) << 16) | (byte(g) << 8) | byte(b);
+}
+
 // MARK: - Store
 
 /**
