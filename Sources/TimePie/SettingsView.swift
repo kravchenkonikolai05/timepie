@@ -109,8 +109,7 @@ struct SettingsView: View {
         .contextMenu { actions(palette) }
     }
 
-    /// The viewed week's chart in the palette, drawn like a friend's week, and what can be
-    /// done to the palette under it.
+    /// The viewed week's chart in the palette, and what can be done to the palette under it.
     private func preview(_ palette: ColorPalette) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             PalettePreview(slices: previewSlices())
@@ -119,9 +118,9 @@ struct SettingsView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .padding(.leading, 40)
+            .frame(maxWidth: .infinity)
         }
-        .padding(.trailing, 12)
+        .padding(.horizontal, 12)
         .padding(.bottom, 14)
         .padding(.top, 4)
     }
@@ -145,57 +144,31 @@ struct SettingsView: View {
         }
     }
 
-    /// Every task of the viewed week with its time, the ones with none included, so the
-    /// list shows each colour the palette gives them.
+    /// The viewed week's time per task. Every task there has ever been is in the list,
+    /// at zero in weeks it isn't part of, so the set never changes between weeks and
+    /// the chart can animate from one week to the next.
     private func previewSlices() -> [Slice] {
         let start = WeekMath.weekStart(for: week)
         let end = WeekMath.weekEnd(for: start)
-        return store.activities(forWeek: start).map {
+        let inWeek = Set(store.activities(forWeek: start).map(\.id))
+        return store.activities.sorted { $0.sortIndex < $1.sortIndex }.map {
             Slice(id: $0.id, name: $0.name,
-                  minutes: max(0, store.minutes(activityID: $0.id, from: start, to: end)),
+                  minutes: inWeek.contains($0.id)
+                      ? max(0, store.minutes(activityID: $0.id, from: start, to: end)) : 0,
                   colorSlot: $0.colorSlot)
         }
     }
 }
 
-/// The week's donut and what it's made of, biggest first: the same card a friend's
-/// week opens into on the friends page.
+/// The week's donut in the palette, just to look at. A fixed size, so the page doesn't
+/// jump when weeks have more or fewer tasks.
 private struct PalettePreview: View {
     let slices: [Slice]
 
-    @State private var hoveredID: UUID?
-
     var body: some View {
-        HStack(alignment: .center, spacing: 18) {
-            DonutChart(slices: slices, hoveredID: hoveredID, onHover: { hoveredID = $0 })
-                .frame(width: 150, height: 150)
-
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(slices.sorted { $0.minutes > $1.minutes }) { slice in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(Palette.color(slot: slice.colorSlot))
-                            .frame(width: 9, height: 9)
-                        Text(slice.name)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(Duration.format(minutes: slice.minutes))
-                            .monospacedDigit()
-                            .foregroundStyle(slice.minutes == 0 ? Ink.muted : Ink.secondary)
-                    }
-                    .font(.callout)
-                    .padding(.vertical, 1)
-                    .padding(.horizontal, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .fill(hoveredID == slice.id ? Color.primary.opacity(0.06) : .clear)
-                    )
-                    .onHover { hoveredID = $0 ? slice.id : nil }
-                }
-            }
+        DonutChart(slices: slices)
+            .frame(width: 170, height: 170)
             .frame(maxWidth: .infinity)
-        }
-        .padding(.leading, 40)
     }
 }
 

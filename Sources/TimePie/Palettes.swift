@@ -26,15 +26,9 @@ struct ColorPalette: Codable, Identifiable, Equatable {
         ColorPalette(id: "retro-neon", name: "Retro Neon", colors: [
             "#ffe53b", "#ff9a3c", "#ff5e7e", "#ff2fb9", "#d53cf5", "#9b5cff", "#6a3df0", "#c77dff",
         ]),
-        ColorPalette(id: "vice-city", name: "Vice City", colors: [
-            "#ff5ca8", "#00f0ff", "#bc6cff", "#ffb86b", "#4b5cff", "#ff2e88", "#7af7ff", "#ffd9a8",
-        ]),
-        ColorPalette(id: "space", name: "Space", colors: [
-            "#2440d8", "#4f7dff", "#9fb6ff", "#f6ecd9", "#ffc58a", "#ff8a3d", "#c8563a", "#b9a7e8",
-        ]),
         // The two darkest swatches of the source (#081919, #223330) vanish on a dark
         // window, so lighter steps of the same greens stand in for them.
-        ColorPalette(id: "red-berry", name: "Red Berry", colors: [
+        ColorPalette(id: "red-wine", name: "Red Wine", colors: [
             "#ce1a1e", "#837f78", "#8f1018", "#4d524b", "#e8524f", "#a9a59d", "#3e5a53", "#65060e",
         ]),
     ]
