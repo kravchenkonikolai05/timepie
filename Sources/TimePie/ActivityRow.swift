@@ -319,44 +319,21 @@ private struct GrabCursor: ViewModifier {
     }
 }
 
-/// The eight validated palette slots plus the neutral overflow, as pickable swatches,
-/// then recent custom colours and the way into the full colour window.
+/// The eight palette slots plus the neutral overflow, as pickable swatches, and the way
+/// into the full colour window. A dot under a swatch marks a colour another task uses.
 struct ColorSwatchPicker: View {
     let current: Int
     let taken: Set<Int>
     let onPick: (Int) -> Void
     let onMore: () -> Void
 
-    /// Recent custom colours, with this activity's own first if it has one.
-    private var customs: [Int] {
-        let recents = CustomColors.recents
-        guard Palette.isCustom(current), !recents.contains(current) else { return recents }
-        return Array(([current] + recents).prefix(CustomColors.limit))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Colour")
-                .font(.system(size: 11))
-                .foregroundStyle(Ink.muted)
-
             HStack(spacing: 8) {
                 ForEach(0...Palette.slotCount, id: \.self) { slot in
                     swatch(slot)
                 }
             }
-
-            if !customs.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(customs, id: \.self) { slot in
-                        swatch(slot)
-                    }
-                }
-            }
-
-            Text("A dot marks a colour another activity already uses.")
-                .font(.system(size: 10))
-                .foregroundStyle(Ink.muted)
 
             Divider()
 

@@ -15,6 +15,8 @@ struct SettingsView: View {
     private var palettes = Palettes.shared
     /// The custom palette open in the editor sheet.
     @State private var editing: ColorPalette?
+    /// The palette clicked last, opened under its row with a preview of this week.
+    @State private var previewing: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -73,36 +75,85 @@ struct SettingsView: View {
 
     private func paletteRow(_ palette: ColorPalette) -> some View {
         let isActive = palette.id == palettes.active.id
-        let isCustom = !palettes.isBuiltIn(palette.id)
-        return HStack(spacing: 10) {
-            Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
-                .font(.title3)
-            Text(palette.name)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            PaletteStrip(palette: palette)
-            if isCustom {
-                Button { editing = palette } label: {
-                    Image(systemName: "pencil")
+        let isOpen = previewing == palette.id
+        return VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                    .font(.title3)
+                Text(palette.name)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                PaletteStrip(palette: palette)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                palettes.activeID = palette.id
+                withAnimation(Motion.snappy) { previewing = isOpen ? nil : palette.id }
+            }
+
+            if isOpen {
+                preview(palette)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .clipped()
+        .contextMenu { actions(palette) }
+    }
+
+    /// This week's chart in the palette, with what can be done to the palette beside it.
+    private func preview(_ palette: ColorPalette) -> some View {
+        HStack(alignment: .center, spacing: 20) {
+            DonutChart(slices: previewSlices(), compact: true)
+                .frame(width: 150, height: 150)
+            VStack(alignment: .leading, spacing: 8) {
+                actions(palette)
+            }
+            .buttonStyle(.bordered)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 14)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func actions(_ palette: ColorPalette) -> some View {
+        if !palettes.isBuiltIn(palette.id) {
+            Button("Edit…") { editing = palette }
+        }
+        Button("Duplicate") {
+            editing = palettes.makeCopy(of: palette)
+            previewing = editing?.id
+        }
+        if palettes.canDelete(palette.id) {
+            Button("Delete", role: .destructive) {
+                withAnimation(Motion.snappy) {
+                    palettes.delete(id: palette.id)
+                    previewing = nil
                 }
-                .buttonStyle(.borderless)
-                .help("Edit this palette")
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .contentShape(Rectangle())
-        .onTapGesture { palettes.activeID = palette.id }
-        .contextMenu {
-            Button("Use") { palettes.activeID = palette.id }
-            Button("Duplicate") { editing = palettes.makeCopy(of: palette) }
-            if isCustom {
-                Button("Edit…") { editing = palette }
-                Divider()
-                Button("Delete", role: .destructive) { palettes.delete(id: palette.id) }
-            }
+    }
+
+    /// This week's tasks by their time. A week with nothing logged yet shows its tasks
+    /// in equal parts, so the preview still has the colours to show.
+    private func previewSlices() -> [Slice] {
+        let start = WeekMath.weekStart(for: Date())
+        let end = WeekMath.weekEnd(for: start)
+        let tasks = store.activities(forWeek: start)
+        let timed = tasks.map {
+            Slice(id: $0.id, name: $0.name,
+                  minutes: store.minutes(activityID: $0.id, from: start, to: end),
+                  colorSlot: $0.colorSlot)
         }
+        if timed.contains(where: { $0.minutes > 0 }) { return timed }
+        let all = tasks.isEmpty
+            ? (0..<Palette.slotCount).map { Slice(id: UUID(), name: "", minutes: 1, colorSlot: $0) }
+            : tasks.map { Slice(id: $0.id, name: $0.name, minutes: 1, colorSlot: $0.colorSlot) }
+        return all
     }
 }
 

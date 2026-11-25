@@ -23,17 +23,19 @@ struct ColorPalette: Codable, Identifiable, Equatable {
         ColorPalette(id: "winter-forest", name: "Winter Forest", colors: [
             "#70cd4a", "#dbe54c", "#ebf1e5", "#344bb5", "#4da6ff", "#cbe9fd", "#9085e9", "#4d4dff",
         ]),
-        ColorPalette(id: "sunset", name: "Sunset", colors: [
-            "#ff595e", "#ff924c", "#ffca3a", "#f15bb5", "#9b5de5", "#c9184a", "#ffb4a2", "#6a4c93",
+        ColorPalette(id: "retro-neon", name: "Retro Neon", colors: [
+            "#ffe53b", "#ff9a3c", "#ff5e7e", "#ff2fb9", "#d53cf5", "#9b5cff", "#6a3df0", "#c77dff",
         ]),
-        ColorPalette(id: "ocean", name: "Ocean", colors: [
-            "#0096c7", "#48cae4", "#2ec4b6", "#90e0ef", "#3a86ff", "#06d6a0", "#caf0f8", "#4361ee",
+        ColorPalette(id: "vice-city", name: "Vice City", colors: [
+            "#ff5ca8", "#00f0ff", "#bc6cff", "#ffb86b", "#4b5cff", "#ff2e88", "#7af7ff", "#ffd9a8",
         ]),
-        ColorPalette(id: "autumn", name: "Autumn", colors: [
-            "#bc4b51", "#f4a259", "#8cb369", "#f4e285", "#5b8e7d", "#d1495b", "#edae49", "#a5668b",
+        ColorPalette(id: "space", name: "Space", colors: [
+            "#2440d8", "#4f7dff", "#9fb6ff", "#f6ecd9", "#ffc58a", "#ff8a3d", "#c8563a", "#b9a7e8",
         ]),
-        ColorPalette(id: "pastel", name: "Pastel", colors: [
-            "#ffadad", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff", "#bdb2ff", "#ffc6ff",
+        // The two darkest swatches of the source (#081919, #223330) vanish on a dark
+        // window, so lighter steps of the same greens stand in for them.
+        ColorPalette(id: "red-berry", name: "Red Berry", colors: [
+            "#ce1a1e", "#837f78", "#8f1018", "#4d524b", "#e8524f", "#a9a59d", "#3e5a53", "#65060e",
         ]),
     ]
 }
@@ -45,6 +47,7 @@ final class Palettes {
 
     private static let activeKey = "palette"
     private static let customKey = "customPalettes"
+    private static let hiddenKey = "hiddenPalettes"
 
     var activeID: String {
         didSet { UserDefaults.standard.set(activeID, forKey: Palettes.activeKey) }
@@ -58,7 +61,14 @@ final class Palettes {
         }
     }
 
-    var all: [ColorPalette] { ColorPalette.builtIn + custom }
+    /// Built-in palettes a person deleted. The standard one can't be: it is the fallback.
+    var hidden: [String] {
+        didSet { UserDefaults.standard.set(hidden, forKey: Palettes.hiddenKey) }
+    }
+
+    var all: [ColorPalette] {
+        ColorPalette.builtIn.filter { !hidden.contains($0.id) } + custom
+    }
 
     /// Falls back to the standard palette if the chosen one was deleted.
     var active: ColorPalette {
@@ -70,6 +80,7 @@ final class Palettes {
         activeID = defaults.string(forKey: Palettes.activeKey) ?? ColorPalette.standard.id
         custom = defaults.data(forKey: Palettes.customKey)
             .flatMap { try? JSONDecoder().decode([ColorPalette].self, from: $0) } ?? []
+        hidden = defaults.stringArray(forKey: Palettes.hiddenKey) ?? []
     }
 
     func isBuiltIn(_ id: String) -> Bool { ColorPalette.builtIn.contains { $0.id == id } }
@@ -94,7 +105,11 @@ final class Palettes {
         custom[i] = palette
     }
 
+    func canDelete(_ id: String) -> Bool { id != ColorPalette.standard.id }
+
     func delete(id: String) {
+        guard canDelete(id) else { return }
+        if isBuiltIn(id) { hidden.append(id) }
         custom.removeAll { $0.id == id }
         if activeID == id { activeID = ColorPalette.standard.id }
     }
