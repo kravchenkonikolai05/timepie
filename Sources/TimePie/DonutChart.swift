@@ -31,6 +31,8 @@ struct DonutChart: View {
     var showsFolders: Bool = false
     /// Folder names, for the arcs and the centre while a folder is hovered.
     var groupNames: [UUID: String] = [:]
+    /// Paints palette slots in this palette instead of the active one (friends' charts).
+    var palette: ColorPalette? = nil
     var onHover: ((UUID?) -> Void)?
 
     private var total: Int { slices.reduce(0) { $0 + max(0, $1.minutes) } }
@@ -104,7 +106,7 @@ struct DonutChart: View {
                 angularInset: compact ? 0.5 : 1.5
             )
             .cornerRadius(compact ? 1.5 : 5)
-            .foregroundStyle(Palette.color(slot: slice.colorSlot))
+            .foregroundStyle(Palette.color(slot: slice.colorSlot, palette: palette))
             .opacity(slice.minutes <= 0 ? 0 : hoveredID == nil || lifted ? 1 : 0.4)
         }
         .chartLegend(.hidden)

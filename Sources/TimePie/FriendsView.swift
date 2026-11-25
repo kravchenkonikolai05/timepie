@@ -81,7 +81,7 @@ private struct Leaderboard: View {
                 .foregroundStyle(standing.place == 1 ? AnyShapeStyle(Color.orange) : AnyShapeStyle(Ink.muted))
                 .frame(width: 20)
 
-            DonutChart(slices: standing.slices, compact: true)
+            DonutChart(slices: standing.slices, compact: true, palette: .standard)
                 .frame(width: 22, height: 22)
                 .allowsHitTesting(false)
 
@@ -134,7 +134,7 @@ private struct LiveBadge: View {
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(Palette.color(slot: live.colorSlot))
+                .fill(Palette.color(slot: live.colorSlot, palette: .standard))
                 .frame(width: 7, height: 7)
                 .opacity(dim ? 0.35 : 1)
             if let name = live.name {
@@ -170,14 +170,14 @@ private struct Breakdown: View {
     var body: some View {
         let slices = standing.slices
         HStack(alignment: .center, spacing: 18) {
-            DonutChart(slices: slices, hoveredID: hoveredID, onHover: { hoveredID = $0 })
+            DonutChart(slices: slices, hoveredID: hoveredID, palette: .standard, onHover: { hoveredID = $0 })
                 .frame(width: 150, height: 150)
 
             VStack(alignment: .leading, spacing: 5) {
                 ForEach(slices.sorted { $0.minutes > $1.minutes }) { slice in
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(Palette.color(slot: slice.colorSlot))
+                            .fill(Palette.color(slot: slice.colorSlot, palette: .standard))
                             .frame(width: 9, height: 9)
                         Text(slice.name)
                             .italic(standing.namesHidden)

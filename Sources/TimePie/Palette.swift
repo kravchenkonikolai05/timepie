@@ -69,10 +69,12 @@ enum Palette {
         return customSlot(rgb: rgb(slot: slot))
     }
 
-    static func color(slot: Int) -> Color {
+    /// `palette` overrides the active one. Friends' charts pass `.standard`: a friend's
+    /// palette slots are the standard colours they see, not ours.
+    static func color(slot: Int, palette override: ColorPalette? = nil) -> Color {
         if isCustom(slot) { return Color(nsColor: NSColor(rgb: slot - customBase)) }
         // Read here, in the caller's body, so SwiftUI redraws it when the palette changes.
-        let palette = Palettes.shared.active
+        let palette = override ?? Palettes.shared.active
         return Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             let hexes = isDark ? palette.darkColors ?? palette.colors : palette.colors
