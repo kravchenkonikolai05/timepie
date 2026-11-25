@@ -301,7 +301,7 @@ final class Friends {
         for code in codes {
             guard let group = groups.first(where: { $0.code == code }) else { continue }
             let live = myTimer.map {
-                Live(name: group.hideNames ? nil : $0.name, colorSlot: $0.colorSlot,
+                Live(name: group.hideNames ? nil : $0.name, colorSlot: Palette.shared(slot: $0.colorSlot),
                      seconds: max(0, Int(Date().timeIntervalSince($0.startedAt))))
             }
             _ = try? await request(
@@ -422,7 +422,7 @@ final class Friends {
         if let group = current {
             let weeks = group.hideNames ? Friends.hidingNames(mine) : mine
             let live = myTimer.map {
-                Live(name: group.hideNames ? nil : $0.name, colorSlot: $0.colorSlot,
+                Live(name: group.hideNames ? nil : $0.name, colorSlot: Palette.shared(slot: $0.colorSlot),
                      seconds: 0, startedAt: $0.startedAt)
             }
             rows.append(Standing(id: group.memberID.uuidString, name: group.name, isMe: true,
@@ -582,7 +582,8 @@ final class Friends {
             let slices = store.activities(forWeek: start).compactMap { activity -> SliceSummary? in
                 let minutes = store.minutes(activityID: activity.id, from: start, to: end)
                 guard minutes > 0 else { return nil }
-                return SliceSummary(name: activity.name, minutes: minutes, colorSlot: activity.colorSlot)
+                return SliceSummary(name: activity.name, minutes: minutes,
+                                    colorSlot: Palette.shared(slot: activity.colorSlot))
             }
             return WeekSummary(week: DayStamp.string(from: start), total: total, slices: slices)
         }

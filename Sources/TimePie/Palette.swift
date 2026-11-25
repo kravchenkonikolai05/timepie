@@ -55,15 +55,27 @@ enum Palette {
     /// The slot's colour as 0xRRGGBB, taking the light-mode value for palette slots.
     static func rgb(slot: Int) -> Int {
         if isCustom(slot) { return slot - customBase }
-        let hex = (slot >= 0 && slot < lightHexes.count) ? lightHexes[slot] : overflowHex
+        let hexes = Palettes.shared.active.colors
+        let hex = (slot >= 0 && slot < hexes.count) ? hexes[slot] : overflowHex
         return Int(hex.dropFirst(), radix: 16) ?? 0
+    }
+
+    /// The slot as friends should see it. Their app paints palette slots in *their*
+    /// palette, so under any palette but the standard one a slot goes out as the
+    /// custom colour it shows here.
+    static func shared(slot: Int) -> Int {
+        guard slot >= 0, slot < slotCount, Palettes.shared.active.id != ColorPalette.standard.id
+        else { return slot }
+        return customSlot(rgb: rgb(slot: slot))
     }
 
     static func color(slot: Int) -> Color {
         if isCustom(slot) { return Color(nsColor: NSColor(rgb: slot - customBase)) }
+        // Read here, in the caller's body, so SwiftUI redraws it when the palette changes.
+        let palette = Palettes.shared.active
         return Color(nsColor: NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let hexes = isDark ? darkHexes : lightHexes
+            let hexes = isDark ? palette.darkColors ?? palette.colors : palette.colors
             let hex = (slot >= 0 && slot < hexes.count) ? hexes[slot] : overflowHex
             return NSColor(hex: hex)
         })
