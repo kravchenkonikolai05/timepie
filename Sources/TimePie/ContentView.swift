@@ -128,7 +128,7 @@ struct ContentView: View {
         ScrollView {
             VStack(spacing: 22) {
                 if showingSettings {
-                    SettingsView()
+                    SettingsView(week: viewedWeek)
                 } else if showingStats {
                     StatsView(selection: $stats)
                 } else if showingGlobal {

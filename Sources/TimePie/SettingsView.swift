@@ -9,14 +9,20 @@ enum Settings {
 /// The settings page, in place of the week like stats, friends and the leaderboard.
 /// Inset grouped cards of rows, as in System Settings; new settings are new rows.
 struct SettingsView: View {
+    /// The week the toolbar arrows are on; the palette preview shows it.
+    let week: Date
     @AppStorage(Settings.showDayAverage) private var showDayAverage = false
     @Environment(Store.self) private var store
     @Environment(Friends.self) private var friends
     private var palettes = Palettes.shared
     /// The custom palette open in the editor sheet.
     @State private var editing: ColorPalette?
-    /// The palette clicked last, opened under its row with a preview of this week.
+    /// The palette clicked last, opened under its row with a preview of the week.
     @State private var previewing: String?
+
+    init(week: Date) {
+        self.week = week
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -103,7 +109,7 @@ struct SettingsView: View {
         .contextMenu { actions(palette) }
     }
 
-    /// This week's chart in the palette, drawn like a friend's week, and what can be
+    /// The viewed week's chart in the palette, drawn like a friend's week, and what can be
     /// done to the palette under it.
     private func preview(_ palette: ColorPalette) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -139,10 +145,10 @@ struct SettingsView: View {
         }
     }
 
-    /// Every task of this week with its time, the ones with none included, so the list
-    /// shows each colour the palette gives them.
+    /// Every task of the viewed week with its time, the ones with none included, so the
+    /// list shows each colour the palette gives them.
     private func previewSlices() -> [Slice] {
-        let start = WeekMath.weekStart(for: Date())
+        let start = WeekMath.weekStart(for: week)
         let end = WeekMath.weekEnd(for: start)
         return store.activities(forWeek: start).map {
             Slice(id: $0.id, name: $0.name,
@@ -152,7 +158,7 @@ struct SettingsView: View {
     }
 }
 
-/// This week's donut and what it's made of, biggest first: the same card a friend's
+/// The week's donut and what it's made of, biggest first: the same card a friend's
 /// week opens into on the friends page.
 private struct PalettePreview: View {
     let slices: [Slice]
